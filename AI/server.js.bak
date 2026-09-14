@@ -1,0 +1,118 @@
+// 2D 素材生成工具 - 本地服务器 + API 代理（零依赖，Node 原生实现）
+// 作用：1) 提供本地网页服务，2) 把 /api/v3/* 请求转发到火山方舟，绕开浏览器跨域限制
+const http = require('http');
+const https = require('https');
+const fs = require('fs');
+const path = require('path');
+const { exec } = require('child_process');
+
+const PORT = 8000;
+const ROOT = __dirname;
+const ARK_HOST = 'ark.cn-beijing.volces.com';
+
+const MIME = {
+  '.html': 'text/html; charset=utf-8',
+  '.js': 'text/javascript; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.gif': 'image/gif',
+  '.svg': 'image/svg+xml',
+  '.json': 'application/json; charset=utf-8',
+  '.ico': 'image/x-icon'
+};
+
+const server = http.createServer(function (req, res) {
+
+  // ============ 1. 图片下载代理：前端把图片 URL 发过来，由服务器下载返回 ============
+  if (req.url === '/api/fetch-image' && req.method === 'POST') {
+    const chunks = [];
+    req.on('data', function (c) { chunks.push(c); });
+    req.on('end', function () {
+      let url = '';
+      try {
+        url = JSON.parse(Buffer.concat(chunks).toString('utf8')).url;
+      } catch (e) { /* ignore */ }
+      if (!url || !/^https:\/\//.test(url)) {
+        res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({ error: 'bad url' }));
+        return;
+      }
+      https.get(url, function (imgRes) {
+        const ctype = imgRes.headers['content-type'] || 'application/octet-stream';
+        res.writeHead(imgRes.statusCode || 200, { 'Content-Type': ctype, 'Cache-Control': 'no-store' });
+        imgRes.pipe(res);
+      }).on('error', function () {
+        res.writeHead(502, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({ error: 'download failed' }));
+      });
+    });
+    return;
+  }
+
+  // ============ 2. API 代理：/api/v3/* → https://ark.cn-beijing.volces.com/api/v3/* ============
+  if (req.url.indexOf('/api/v3/') === 0) {
+    const targetPath = req.url; // 路径原样转发
+    const chunks = [];
+    req.on('data', function (c) { chunks.push(c); });
+    req.on('end', function () {
+      const payload = Buffer.concat(chunks);
+      const headers = {};
+      Object.keys(req.headers).forEach(function (k) {
+        if (k === 'host' || k === 'content-length' || k === 'connection') return;
+        headers[k] = req.headers[k];
+      });
+      headers.host = ARK_HOST;
+      const options = {
+        hostname: ARK_HOST,
+        path: targetPath,
+        method: req.method,
+        headers: headers
+      };
+      const proxy = https.request(options, function (upRes) {
+        res.writeHead(upRes.statusCode, upRes.headers);
+        upRes.pipe(res);
+      });
+      proxy.on('error', function () {
+        res.writeHead(502, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({ error: { message: '代理转发失败，请检查网络' } }));
+      });
+      proxy.end(payload);
+    });
+    return;
+  }
+
+  // ============ 3. 静态文件服务 ============
+  let urlPath = req.url.split('?')[0];
+  if (urlPath === '/') urlPath = '/index.html';
+  let filePath;
+  try {
+    filePath = path.join(ROOT, decodeURIComponent(urlPath));
+  } catch (e) {
+    filePath = path.join(ROOT, urlPath);
+  }
+  // 防止路径穿越
+  if (filePath.indexOf(ROOT) !== 0) {
+    res.writeHead(403, { 'Content-Type': 'text/plain; charset=utf-8' });
+    res.end('403');
+    return;
+  }
+  fs.readFile(filePath, function (err, data) {
+    if (err) {
+      res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
+      res.end('404 Not Found: ' + urlPath);
+      return;
+    }
+    const ext = path.extname(filePath).toLowerCase();
+    res.writeHead(200, { 'Content-Type': MIME[ext] || 'application/octet-stream' });
+    res.end(data);
+  });
+});
+
+server.listen(PORT, function () {
+  console.log('2D 素材生成工具已启动: http://localhost:' + PORT);
+  console.log('按 Ctrl+C 可停止服务。');
+  // 自动打开浏览器
+  exec('start http://localhost:' + PORT, function () {});
+});

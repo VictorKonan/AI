@@ -1,0 +1,1268 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>2D 素材生成开发工具</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      height: 100%;
+      width: 100%;
+      overflow: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+        "Microsoft YaHei", sans-serif;
+      font-size: 14px;
+      color: #1f2329;
+      background: #f7f8fa;
+    }
+
+    /* 整体两栏布局 */
+    .app {
+      display: flex;
+      height: 100vh;
+      width: 100vw;
+    }
+
+    /* ============ 左侧侧边栏 ============ */
+    .sidebar {
+      width: 260px;
+      min-width: 260px;
+      height: 100%;
+      background: #ffffff;
+      border-right: 1px solid #e5e6eb;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* 新建任务按钮 */
+    .sidebar__new-task {
+      padding: 16px;
+      border-bottom: 1px solid #f0f1f5;
+    }
+
+    .new-task-btn {
+      width: 100%;
+      height: 40px;
+      border: none;
+      border-radius: 8px;
+      background: #4d6bfe;
+      color: #ffffff;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .new-task-btn:hover {
+      background: #3d5aef;
+    }
+
+    /* 历史列表通用容器 */
+    .sidebar__list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 8px 8px 16px;
+    }
+
+    .sidebar__section-title {
+      padding: 8px 12px;
+      font-size: 12px;
+      color: #8f959e;
+      font-weight: 500;
+      user-select: none;
+    }
+
+    /* 历史对话项 */
+    .history-item {
+      padding: 10px 12px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background 0.2s;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .history-item:hover {
+      background: #f2f3f5;
+    }
+
+    .history-item--active {
+      background: #eef1ff;
+      color: #4d6bfe;
+    }
+
+    /* 历史作品项（带缩略图） */
+    .work-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .work-item:hover {
+      background: #f2f3f5;
+    }
+
+    .work-item__thumb {
+      width: 36px;
+      height: 36px;
+      border-radius: 6px;
+      background: #e9ecf0;
+      flex-shrink: 0;
+      object-fit: cover;
+    }
+
+    .work-item__body {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .work-item__title {
+      font-size: 13px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .work-item__time {
+      font-size: 11px;
+      color: #8f959e;
+      margin-top: 2px;
+    }
+
+    /* ============ 右侧主内容区 ============ */
+    .main {
+      flex: 1;
+      min-width: 0;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      background: #f7f8fa;
+    }
+
+    /* 顶部对话展示区域 */
+    .chat-area {
+      flex: 1;
+      overflow-y: auto;
+      padding: 24px 32px;
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+
+    .message {
+      display: flex;
+      gap: 12px;
+      max-width: 80%;
+    }
+
+    .message--user {
+      align-self: flex-end;
+      flex-direction: row-reverse;
+    }
+
+    .message__avatar {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      flex-shrink: 0;
+      background: #d9d9d9;
+    }
+
+    .message--user .message__avatar {
+      background: #4d6bfe;
+    }
+
+    .message__bubble {
+      padding: 12px 16px;
+      border-radius: 12px;
+      background: #ffffff;
+      border: 1px solid #e5e6eb;
+      line-height: 1.6;
+      word-break: break-word;
+    }
+
+    .message--user .message__bubble {
+      background: #4d6bfe;
+      color: #ffffff;
+      border-color: transparent;
+    }
+
+    /* 生成的素材图片预览 */
+    .material-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 12px;
+      max-width: 600px;
+      margin-top: 8px;
+    }
+
+    .material-card {
+      border-radius: 8px;
+      overflow: hidden;
+      background: #e9ecf0;
+      aspect-ratio: 1 / 1;
+      cursor: pointer;
+    }
+
+    .material-card img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+
+    /* 生成中 / 错误提示气泡 */
+    .msg-loading {
+      color: #8f959e;
+      font-size: 13px;
+    }
+
+    .msg-error {
+      color: #d54941;
+      font-size: 13px;
+    }
+
+    /* 图片大图预览（lightbox） */
+    .lightbox {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.78);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      gap: 12px;
+      z-index: 999;
+      cursor: zoom-out;
+    }
+
+    .lightbox img {
+      max-width: 88vw;
+      max-height: 80vh;
+      border-radius: 8px;
+      background: #ffffff;
+      cursor: zoom-out;
+    }
+
+    .lightbox__caption {
+      color: #ffffff;
+      font-size: 13px;
+      max-width: 80vw;
+      text-align: center;
+      word-break: break-word;
+    }
+
+    /* 底部输入栏 */
+    .input-bar {
+      border-top: 1px solid #e5e6eb;
+      background: #ffffff;
+      padding: 16px 32px;
+    }
+
+    .input-bar__inner {
+      display: flex;
+      align-items: flex-end;
+      gap: 12px;
+      background: #f2f3f5;
+      border-radius: 12px;
+      padding: 8px 12px;
+      border: 1px solid transparent;
+      transition: border-color 0.2s;
+    }
+
+    .input-bar__inner:focus-within {
+      border-color: #4d6bfe;
+      background: #ffffff;
+    }
+
+    /* 加号按钮 */
+    .upload-btn {
+      width: 32px;
+      height: 32px;
+      border: none;
+      border-radius: 8px;
+      background: transparent;
+      color: #8f959e;
+      font-size: 20px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      transition: background 0.2s, color 0.2s;
+    }
+
+    .upload-btn:hover {
+      background: #e5e6eb;
+      color: #1f2329;
+    }
+
+    .upload-btn input[type="file"] {
+      display: none;
+    }
+
+    /* 参考图预览区 */
+    .preview-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+
+    .preview-thumb {
+      position: relative;
+      width: 64px;
+      height: 64px;
+      border-radius: 8px;
+      overflow: hidden;
+      border: 1px solid #e5e6eb;
+    }
+
+    .preview-thumb img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+
+    .preview-thumb__remove {
+      position: absolute;
+      top: 2px;
+      right: 2px;
+      width: 18px;
+      height: 18px;
+      border: none;
+      border-radius: 50%;
+      background: rgba(0, 0, 0, 0.6);
+      color: #fff;
+      font-size: 12px;
+      line-height: 1;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* 文本输入框 */
+    .prompt-input {
+      flex: 1;
+      min-height: 32px;
+      max-height: 160px;
+      resize: none;
+      border: none;
+      outline: none;
+      background: transparent;
+      font-size: 14px;
+      line-height: 1.6;
+      font-family: inherit;
+      color: #1f2329;
+    }
+
+    .prompt-input::placeholder {
+      color: #8f959e;
+    }
+
+    /* 发送按钮 */
+    .send-btn {
+      width: 32px;
+      height: 32px;
+      border: none;
+      border-radius: 8px;
+      background: #4d6bfe;
+      color: #ffffff;
+      cursor: pointer;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.2s;
+    }
+
+    .send-btn:hover {
+      background: #3d5aef;
+    }
+
+    .send-btn:disabled {
+      background: #c9cdd4;
+      cursor: not-allowed;
+    }
+
+    /* 滚动条样式 */
+    .chat-area::-webkit-scrollbar,
+    .sidebar__list::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    .chat-area::-webkit-scrollbar-thumb,
+    .sidebar__list::-webkit-scrollbar-thumb {
+      background: #c9cdd4;
+      border-radius: 3px;
+    }
+
+    .chat-area::-webkit-scrollbar-thumb:hover,
+    .sidebar__list::-webkit-scrollbar-thumb:hover {
+      background: #8f959e;
+    }
+
+    /* 空状态提示 */
+    .empty-tip {
+      margin: auto;
+      color: #8f959e;
+      font-size: 14px;
+      text-align: center;
+    }
+
+    /* 侧边栏底部设置入口 */
+    .sidebar__footer {
+      padding: 12px 16px;
+      border-top: 1px solid #f0f1f5;
+    }
+
+    .settings-btn {
+      width: 100%;
+      height: 36px;
+      border: 1px solid #e5e6eb;
+      border-radius: 8px;
+      background: #ffffff;
+      color: #4d6bfe;
+      font-size: 13px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      transition: background 0.2s;
+    }
+
+    .settings-btn:hover {
+      background: #eef1ff;
+    }
+
+    /* 弹窗通用 */
+    .modal-mask {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.45);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+    }
+
+    .modal {
+      width: 380px;
+      max-width: 90vw;
+      background: #ffffff;
+      border-radius: 14px;
+      padding: 20px;
+      box-shadow: 0 8px 30px rgba(0, 0, 0, 0.15);
+    }
+
+    .modal__title {
+      font-size: 15px;
+      font-weight: 600;
+    }
+
+    .modal__desc {
+      font-size: 12px;
+      color: #8f959e;
+      margin: 6px 0 14px;
+      line-height: 1.6;
+    }
+
+    .modal__input {
+      width: 100%;
+      height: 40px;
+      border: 1px solid #e5e6eb;
+      border-radius: 8px;
+      padding: 0 12px;
+      font-size: 13px;
+      outline: none;
+      box-sizing: border-box;
+    }
+
+    .modal__input:focus {
+      border-color: #4d6bfe;
+    }
+
+    .modal__actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+      margin-top: 16px;
+    }
+
+    .modal__btn {
+      height: 34px;
+      padding: 0 16px;
+      border: none;
+      border-radius: 8px;
+      background: #4d6bfe;
+      color: #ffffff;
+      font-size: 13px;
+      cursor: pointer;
+    }
+
+    .modal__btn--ghost {
+      background: #f2f3f5;
+      color: #1f2329;
+    }
+
+    .modal__btn:hover {
+      opacity: 0.9;
+    }
+
+    /* 错误气泡里的重填 Key 按钮 */
+    .retry-key-btn {
+      margin-top: 10px;
+      padding: 6px 12px;
+      border: 1px solid #d5d8de;
+      border-radius: 8px;
+      background: #ffffff;
+      color: #4d6bfe;
+      font-size: 12px;
+      cursor: pointer;
+    }
+
+    .retry-key-btn:hover {
+      background: #eef1ff;
+    }
+
+    /* 右键菜单 */
+    .context-menu {
+      position: fixed;
+      z-index: 1100;
+      background: #ffffff;
+      border: 1px solid #e5e6eb;
+      border-radius: 8px;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+      padding: 4px;
+      min-width: 110px;
+    }
+
+    .context-menu__item {
+      padding: 8px 12px;
+      font-size: 13px;
+      color: #d54941;
+      border-radius: 6px;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .context-menu__item:hover {
+      background: #fff1f0;
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <!-- ============ 左侧侧边栏 ============ -->
+    <aside class="sidebar">
+      <!-- 新建任务按钮 -->
+      <div class="sidebar__new-task">
+        <button class="new-task-btn" id="newTaskBtn">+ 新建任务</button>
+      </div>
+
+      <!-- 历史列表（对话 + 作品） -->
+      <div class="sidebar__list">
+        <!-- 历史对话 -->
+        <div class="sidebar__section-title">历史对话</div>
+        <div id="historyList"></div>
+
+        <!-- 历史作品 -->
+        <div class="sidebar__section-title" style="margin-top: 12px;">历史作品</div>
+        <div id="worksList"></div>
+      </div>
+
+      <!-- 底部设置入口 -->
+      <div class="sidebar__footer">
+        <button class="settings-btn" id="settingsBtn">API 设置</button>
+      </div>
+    </aside>
+
+    <!-- ============ 右侧主内容区 ============ -->
+    <main class="main">
+      <!-- 顶部对话展示区域 -->
+      <section class="chat-area" id="chatArea">
+        <!-- 空状态提示 -->
+        <div class="empty-tip">输入提示词开始生成你的 2D 素材</div>
+      </section>
+
+      <!-- 底部输入栏 -->
+      <div class="input-bar">
+        <!-- 参考图预览区 -->
+        <div class="preview-row" id="previewRow"></div>
+
+        <div class="input-bar__inner">
+          <!-- 加号按钮：唤起文件选择 -->
+          <label class="upload-btn" title="上传参考图">
+            +
+            <input type="file" id="fileInput" accept="image/*" multiple />
+          </label>
+
+          <!-- 文本输入框 -->
+          <textarea
+            class="prompt-input"
+            id="promptInput"
+            placeholder="输入提示词，描述你想生成的 2D 素材…"
+            rows="1"
+          ></textarea>
+
+          <!-- 发送按钮 -->
+          <button class="send-btn" id="sendBtn" title="发送" disabled>↑</button>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- 图片大图预览 -->
+  <div class="lightbox" id="lightbox"></div>
+
+  <!-- API Key 设置弹窗 -->
+  <div class="modal-mask" id="settingsModal" style="display:none;">
+    <div class="modal">
+      <div class="modal__title">API Key 设置</div>
+      <div class="modal__desc">填入你的火山方舟 API Key，仅保存在本机浏览器。填错可随时回来修改。</div>
+      <input type="password" class="modal__input" id="keyInput" placeholder="粘贴 API Key" autocomplete="off" />
+      <div class="modal__actions">
+        <button class="modal__btn modal__btn--ghost" id="keyCancel">取消</button>
+        <button class="modal__btn" id="keySave">保存</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 右键菜单 -->
+  <div class="context-menu" id="contextMenu" style="display:none;">
+    <div class="context-menu__item" id="ctxDelete">删除</div>
+  </div>
+
+  <script>
+    (function () {
+      // ================= 配置（改成你自己的） =================
+      var MODEL = 'doubao-seedream-4-0-20260415';
+      // 走本地代理（server.js），绕开浏览器跨域限制；请用 start.bat 启动后再打开本页
+      var API_URL = '/api/v3/images/generations';
+
+      // API Key：存在浏览器本地（localStorage），在左下角「API 设置」里填写/修改
+      var API_KEY = localStorage.getItem('matgen_api_key') || '';
+
+      // ================= DOM =================
+      var chatArea = document.getElementById('chatArea');
+      var promptInput = document.getElementById('promptInput');
+      var sendBtn = document.getElementById('sendBtn');
+      var newTaskBtn = document.getElementById('newTaskBtn');
+      var fileInput = document.getElementById('fileInput');
+      var previewRow = document.getElementById('previewRow');
+      var historyList = document.getElementById('historyList');
+      var worksList = document.getElementById('worksList');
+      var lightbox = document.getElementById('lightbox');
+      var settingsBtn = document.getElementById('settingsBtn');
+      var settingsModal = document.getElementById('settingsModal');
+      var keyInput = document.getElementById('keyInput');
+      var keySave = document.getElementById('keySave');
+      var keyCancel = document.getElementById('keyCancel');
+      var contextMenu = document.getElementById('contextMenu');
+      var ctxDelete = document.getElementById('ctxDelete');
+
+      // ================= 状态 =================
+      var currentChatId = null;   // 当前会话 id（null 表示还没建会话）
+      var refImages = [];         // 参考图 base64 数组
+      var sending = false;        // 是否正在生成
+
+      // ================= IndexedDB（本地持久化） =================
+      function openDB() {
+        return new Promise(function (resolve, reject) {
+          var req = indexedDB.open('matGenDB', 1);
+          req.onupgradeneeded = function (e) {
+            var db = e.target.result;
+            if (!db.objectStoreNames.contains('works')) {
+              db.createObjectStore('works', { keyPath: 'id' });
+            }
+            if (!db.objectStoreNames.contains('chats')) {
+              db.createObjectStore('chats', { keyPath: 'id' });
+            }
+          };
+          req.onsuccess = function () { resolve(req.result); };
+          req.onerror = function () { reject(req.error); };
+        });
+      }
+
+      function dbPut(storeName, value) {
+        return openDB().then(function (db) {
+          return new Promise(function (resolve, reject) {
+            var tx = db.transaction(storeName, 'readwrite');
+            tx.objectStore(storeName).put(value);
+            tx.oncomplete = function () { resolve(); db.close(); };
+            tx.onerror = function () { reject(tx.error); db.close(); };
+          });
+        });
+      }
+
+      function dbGetAll(storeName) {
+        return openDB().then(function (db) {
+          return new Promise(function (resolve, reject) {
+            var tx = db.transaction(storeName, 'readonly');
+            var req = tx.objectStore(storeName).getAll();
+            req.onsuccess = function () { resolve(req.result); db.close(); };
+            req.onerror = function () { reject(req.error); db.close(); };
+          });
+        });
+      }
+
+      function dbGet(storeName, id) {
+        return openDB().then(function (db) {
+          return new Promise(function (resolve, reject) {
+            var tx = db.transaction(storeName, 'readonly');
+            var req = tx.objectStore(storeName).get(id);
+            req.onsuccess = function () { resolve(req.result); db.close(); };
+            req.onerror = function () { reject(req.error); db.close(); };
+          });
+        });
+      }
+
+      function dbDelete(storeName, id) {
+        return openDB().then(function (db) {
+          return new Promise(function (resolve, reject) {
+            var tx = db.transaction(storeName, 'readwrite');
+            tx.objectStore(storeName).delete(id);
+            tx.oncomplete = function () { resolve(); db.close(); };
+            tx.onerror = function () { reject(tx.error); db.close(); };
+          });
+        });
+      }
+
+      // ================= 工具函数 =================
+      function escapeHtml(str) {
+        var div = document.createElement('div');
+        div.textContent = str == null ? '' : String(str);
+        return div.innerHTML;
+      }
+
+      function blobURL(blob) {
+        return URL.createObjectURL(blob);
+      }
+
+      function showEmptyTip() {
+        var tip = document.createElement('div');
+        tip.className = 'empty-tip';
+        tip.textContent = '输入提示词开始生成你的 2D 素材';
+        chatArea.appendChild(tip);
+      }
+
+      function updateSendState() {
+        var hasText = promptInput.value.trim().length > 0;
+        sendBtn.disabled = !hasText || sending;
+      }
+
+      function autoResize() {
+        promptInput.style.height = 'auto';
+        promptInput.style.height = Math.min(promptInput.scrollHeight, 160) + 'px';
+      }
+
+      function scrollToBottom() {
+        chatArea.scrollTop = chatArea.scrollHeight;
+      }
+
+      function fmtTime(ts) {
+        var d = new Date(ts);
+        function p(n) { return (n < 10 ? '0' : '') + n; }
+        return (d.getMonth() + 1) + '-' + d.getDate() + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+      }
+
+      // 把完整提示词简化为短标题（作品列表里不显示全文）
+      function simplifyTitle(text) {
+        var t = String(text || '').trim();
+        if (t.length <= 12) return t;
+        return t.slice(0, 12) + '…';
+      }
+
+      // ================= 调用即梦生图 API =================
+      function generateImages(prompt, images) {
+        var body = {
+          model: MODEL,
+          prompt: prompt,
+          size: '1024x1024',
+          response_format: 'url',
+          watermark: false
+        };
+        // 有参考图就传给模型（图生图）
+        if (images && images.length) {
+          body.image = images;
+        }
+        return fetch(API_URL, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + API_KEY
+          },
+          body: JSON.stringify(body)
+        }).then(function (res) {
+          return res.json().then(function (data) {
+            if (!res.ok) {
+              // 401/403 = Key 无效，单独标记出来给用户重填
+              if (res.status === 401 || res.status === 403) {
+                throw new Error('API_KEY_INVALID');
+              }
+              var msg = data.error && (data.error.message || data.error.code);
+              throw new Error(msg || ('HTTP ' + res.status));
+            }
+            if (!data.data || !data.data.length) {
+              throw new Error('接口没有返回图片');
+            }
+            return data.data.map(function (item) { return item.url; });
+          });
+        });
+      }
+
+      function fetchBlob(url) {
+        // 通过本地代理下载图片（图片 CDN 也有跨域限制，走服务器就没了）
+        return fetch('/api/fetch-image', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url: url })
+        }).then(function (r) {
+          if (!r.ok) throw new Error('图片下载失败');
+          return r.blob();
+        });
+      }
+
+      // ================= 聊天消息渲染 =================
+      function createUserMessage(text) {
+        var emptyTip = chatArea.querySelector('.empty-tip');
+        if (emptyTip) emptyTip.remove();
+
+        var msg = document.createElement('div');
+        msg.className = 'message message--user';
+        var avatar = document.createElement('div');
+        avatar.className = 'message__avatar';
+        var bubble = document.createElement('div');
+        bubble.className = 'message__bubble';
+        bubble.textContent = text;
+        msg.appendChild(avatar);
+        msg.appendChild(bubble);
+        chatArea.appendChild(msg);
+        return msg;
+      }
+
+      function createAIMessage(loadingText) {
+        var msg = document.createElement('div');
+        msg.className = 'message';
+        var avatar = document.createElement('div');
+        avatar.className = 'message__avatar';
+        var bubble = document.createElement('div');
+        bubble.className = 'message__bubble';
+        bubble.innerHTML = '<div class="msg-loading">' + escapeHtml(loadingText) + '</div>';
+        msg.appendChild(avatar);
+        msg.appendChild(bubble);
+        chatArea.appendChild(msg);
+        scrollToBottom();
+        return bubble;
+      }
+
+      // 把生成的图片放进 AI 气泡
+      function renderImagesInto(bubble, blobs, prompt) {
+        bubble.innerHTML = '';
+        var grid = document.createElement('div');
+        grid.className = 'material-grid';
+        blobs.forEach(function (blob) {
+          var url = blobURL(blob);
+          var card = document.createElement('div');
+          card.className = 'material-card';
+          var img = document.createElement('img');
+          img.src = url;
+          img.alt = prompt || '生成素材';
+          img.addEventListener('click', function () {
+            showLightbox(url, prompt);
+          });
+          card.appendChild(img);
+          grid.appendChild(card);
+        });
+        bubble.appendChild(grid);
+        scrollToBottom();
+      }
+
+      function showErrorIn(bubble, msg) {
+        bubble.innerHTML = '<div class="msg-error">生成失败：' + escapeHtml(msg) + '</div>';
+        scrollToBottom();
+      }
+
+      // ================= 图片大图预览 =================
+      function showLightbox(url, prompt) {
+        lightbox.innerHTML = '<img src="' + url + '">' +
+          '<div class="lightbox__caption">' + escapeHtml(prompt || '') + '</div>';
+        lightbox.style.display = 'flex';
+      }
+
+      lightbox.addEventListener('click', function () {
+        lightbox.style.display = 'none';
+        lightbox.innerHTML = '';
+      });
+
+      // ================= API Key 设置弹窗 =================
+      function openSettings() {
+        keyInput.value = API_KEY || '';
+        settingsModal.style.display = 'flex';
+        keyInput.focus();
+      }
+
+      function closeSettings() {
+        settingsModal.style.display = 'none';
+      }
+
+      keySave.addEventListener('click', function () {
+        var v = keyInput.value.trim();
+        if (!v) {
+          keyInput.focus();
+          return;
+        }
+        API_KEY = v;
+        localStorage.setItem('matgen_api_key', v);
+        closeSettings();
+        updateSendState();
+      });
+
+      keyCancel.addEventListener('click', closeSettings);
+
+      // 点击遮罩空白处关闭
+      settingsModal.addEventListener('click', function (e) {
+        if (e.target === settingsModal) closeSettings();
+      });
+
+      // 回车保存
+      keyInput.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') keySave.click();
+      });
+
+      settingsBtn.addEventListener('click', openSettings);
+
+      // 错误气泡里的「重新填写 API Key」按钮
+      function addRetryKeyButton(bubble) {
+        var btn = document.createElement('button');
+        btn.className = 'retry-key-btn';
+        btn.textContent = '重新填写 API Key';
+        btn.addEventListener('click', openSettings);
+        bubble.appendChild(btn);
+      }
+
+      // ================= 右键删除菜单 =================
+      var ctxTarget = null; // { type: 'work' | 'chat', id: ... }
+
+      function showContextMenu(x, y, type, id) {
+        ctxTarget = { type: type, id: id };
+        contextMenu.style.display = 'block';
+        var mw = 120;
+        var mh = 40;
+        contextMenu.style.left = Math.min(x, window.innerWidth - mw - 8) + 'px';
+        contextMenu.style.top = Math.min(y, window.innerHeight - mh - 8) + 'px';
+      }
+
+      function hideContextMenu() {
+        contextMenu.style.display = 'none';
+        ctxTarget = null;
+      }
+
+      // 点击页面任意位置关闭菜单
+      document.addEventListener('click', function () {
+        if (contextMenu.style.display !== 'none') hideContextMenu();
+      });
+
+      // 在列表项之外的地方右键，不弹菜单
+      document.addEventListener('contextmenu', function (e) {
+        if (!e.target.closest('.work-item') && !e.target.closest('.history-item')) {
+          hideContextMenu();
+        }
+      });
+
+      // 点击「删除」
+      ctxDelete.addEventListener('click', function () {
+        if (!ctxTarget) return;
+        var target = ctxTarget;
+        hideContextMenu();
+        if (target.type === 'work') {
+          if (confirm('确定删除这个作品？')) {
+            dbDelete('works', target.id).then(renderWorks);
+          }
+        } else {
+          if (confirm('确定删除这段对话？')) {
+            dbDelete('chats', target.id).then(function () {
+              // 删除的如果是当前打开的会话，清空对话区
+              if (target.id === currentChatId) {
+                currentChatId = null;
+                chatArea.innerHTML = '';
+                showEmptyTip();
+              }
+              renderHistory();
+            });
+          }
+        }
+      });
+
+      // ================= 会话与作品持久化 =================
+      function saveWork(prompt, blob) {
+        return dbPut('works', {
+          id: Date.now() + '_' + Math.random().toString(36).slice(2, 8),
+          prompt: prompt,
+          blob: blob,
+          time: Date.now()
+        });
+      }
+
+      function saveChatMessage(msg) {
+        var chat = { id: currentChatId || ('chat_' + Date.now()), messages: [], time: Date.now() };
+        // 已存在则续写
+        return dbGet('chats', chat.id).then(function (old) {
+          if (old) chat = old;
+          chat.messages.push(msg);
+          chat.time = Date.now();
+          if (!chat.title) {
+            // 标题取第一条用户消息
+            var first = chat.messages.filter(function (m) { return m.role === 'user'; })[0];
+            chat.title = first ? first.text.slice(0, 14) : '新会话';
+          }
+          currentChatId = chat.id;
+          return dbPut('chats', chat);
+        });
+      }
+
+      // ================= 左侧列表渲染 =================
+      function renderWorks() {
+        dbGetAll('works').then(function (works) {
+          works.sort(function (a, b) { return b.time - a.time; });
+          worksList.innerHTML = '';
+          if (!works.length) {
+            worksList.innerHTML = '<div style="padding:8px 12px;font-size:12px;color:#c9cdd4;">暂无作品</div>';
+            return;
+          }
+          works.forEach(function (w) {
+            var item = document.createElement('div');
+            item.className = 'work-item';
+            var url = blobURL(w.blob);
+            item.innerHTML =
+              '<img class="work-item__thumb" src="' + url + '" alt="">' +
+              '<div class="work-item__body">' +
+                '<div class="work-item__title">' + escapeHtml(simplifyTitle(w.prompt)) + '</div>' +
+                '<div class="work-item__time">' + fmtTime(w.time) + '</div>' +
+              '</div>';
+            item.addEventListener('click', function () {
+              showLightbox(url, w.prompt);
+            });
+            // 右键删除
+            item.addEventListener('contextmenu', function (e) {
+              e.preventDefault();
+              e.stopPropagation();
+              showContextMenu(e.clientX, e.clientY, 'work', w.id);
+            });
+            worksList.appendChild(item);
+          });
+        });
+      }
+
+      function renderHistory() {
+        dbGetAll('chats').then(function (chats) {
+          chats.sort(function (a, b) { return b.time - a.time; });
+          historyList.innerHTML = '';
+          if (!chats.length) {
+            historyList.innerHTML = '<div style="padding:8px 12px;font-size:12px;color:#c9cdd4;">暂无对话</div>';
+            return;
+          }
+          chats.forEach(function (c) {
+            var item = document.createElement('div');
+            item.className = 'history-item' + (c.id === currentChatId ? ' history-item--active' : '');
+            item.textContent = c.title;
+            item.title = c.title;
+            item.addEventListener('click', function () { loadChat(c.id); });
+            // 右键删除
+            item.addEventListener('contextmenu', function (e) {
+              e.preventDefault();
+              e.stopPropagation();
+              showContextMenu(e.clientX, e.clientY, 'chat', c.id);
+            });
+            historyList.appendChild(item);
+          });
+        });
+      }
+
+      // 加载某个历史会话到对话区
+      function loadChat(id) {
+        dbGet('chats', id).then(function (chat) {
+          if (!chat) return;
+          currentChatId = id;
+          chatArea.innerHTML = '';
+          chat.messages.forEach(function (m) {
+            if (m.role === 'user') {
+              createUserMessage(m.text);
+            } else {
+              var bubble = createAIMessage('加载中…');
+              if (m.blobs && m.blobs.length) {
+                renderImagesInto(bubble, m.blobs, m.text);
+              } else if (m.error) {
+                showErrorIn(bubble, m.error);
+              } else {
+                bubble.innerHTML = escapeHtml(m.text || '');
+              }
+            }
+          });
+          if (!chatArea.children.length) showEmptyTip();
+          renderHistory();
+          scrollToBottom();
+        });
+      }
+
+      // ================= 发送消息（核心流程） =================
+      function sendMessage() {
+        var text = promptInput.value.trim();
+        if (!text || sending) return;
+
+        if (!API_KEY) {
+          openSettings();
+          return;
+        }
+
+        sending = true;
+        updateSendState();
+
+        // 1. 用户气泡 + 保存用户消息
+        createUserMessage(text);
+        saveChatMessage({ role: 'user', text: text });
+
+        // 2. AI 加载气泡
+        var aiBubble = createAIMessage('正在生成，约 10~30 秒…');
+
+        // 3. 调用生图 API
+        generateImages(text, refImages)
+          .then(function (urls) {
+            // 4. 逐张下载为 Blob（本地保存，URL 过期也不怕）
+            var jobs = urls.map(fetchBlob);
+            return Promise.all(jobs).then(function (blobs) {
+              return { urls: urls, blobs: blobs };
+            });
+          })
+          .then(function (result) {
+            // 5. 渲染到聊天框
+            renderImagesInto(aiBubble, result.blobs, text);
+            // 6. 保存 AI 消息（含图片 Blob，供历史对话回看）
+            return saveChatMessage({ role: 'ai', text: text, blobs: result.blobs })
+              .then(function () {
+                // 7. 每张图存入历史作品
+                var saveJobs = result.blobs.map(function (blob) {
+                  return saveWork(text, blob);
+                });
+                return Promise.all(saveJobs);
+              });
+          })
+          .then(function () {
+            renderWorks();
+            renderHistory();
+          })
+          .catch(function (err) {
+            var msg = err && err.message ? err.message : String(err);
+            if (msg === 'API_KEY_INVALID') {
+              // Key 无效：提示 + 直接给重填入口
+              showErrorIn(aiBubble, 'API Key 无效或未开通该模型，请重新填写');
+              addRetryKeyButton(aiBubble);
+            } else if (/Failed to fetch|NetworkError|CORS|load failed/i.test(msg)) {
+              msg = '跨域/网络错误：如果用文件直接打开，请改用本地服务器（命令行运行 python -m http.server 8000），或到「API 设置」检查 Key';
+              showErrorIn(aiBubble, msg);
+            } else {
+              showErrorIn(aiBubble, msg);
+            }
+            saveChatMessage({ role: 'ai', text: text, error: msg }).then(renderHistory);
+          })
+          .finally(function () {
+            sending = false;
+            updateSendState();
+          });
+
+        // 8. 清空输入（参考图保留，方便连续生成同一风格）
+        promptInput.value = '';
+        autoResize();
+        scrollToBottom();
+        promptInput.focus();
+      }
+
+      // ================= 参考图上传 =================
+      fileInput.addEventListener('change', function (e) {
+        var files = Array.prototype.slice.call(e.target.files || []);
+        files.forEach(function (f) {
+          if (!f.type.match(/^image\//)) return;
+          var reader = new FileReader();
+          reader.onload = function () {
+            refImages.push(reader.result);
+            renderPreview();
+          };
+          reader.readAsDataURL(f);
+        });
+        e.target.value = '';
+      });
+
+      function renderPreview() {
+        previewRow.innerHTML = '';
+        refImages.forEach(function (base64, idx) {
+          var thumb = document.createElement('div');
+          thumb.className = 'preview-thumb';
+          thumb.innerHTML = '<img src="' + base64 + '" alt="参考图">' +
+            '<button class="preview-thumb__remove" title="移除">×</button>';
+          thumb.querySelector('.preview-thumb__remove').addEventListener('click', function () {
+            refImages.splice(idx, 1);
+            renderPreview();
+          });
+          previewRow.appendChild(thumb);
+        });
+      }
+
+      // ================= 新建任务 =================
+      newTaskBtn.addEventListener('click', function () {
+        currentChatId = null;
+        refImages = [];
+        previewRow.innerHTML = '';
+        chatArea.innerHTML = '';
+        showEmptyTip();
+        renderHistory();
+        promptInput.focus();
+      });
+
+      // ================= 事件绑定 =================
+      promptInput.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' && !e.shiftKey) {
+          e.preventDefault();
+          sendMessage();
+        }
+      });
+
+      promptInput.addEventListener('input', function () {
+        updateSendState();
+        autoResize();
+      });
+
+      sendBtn.addEventListener('click', sendMessage);
+
+      // ================= 初始化 =================
+      renderWorks();
+      renderHistory();
+      updateSendState();
+      // 首次打开还没有 Key 时，自动弹出设置窗口
+      if (!API_KEY) {
+        setTimeout(openSettings, 300);
+      }
+      promptInput.focus();
+    })();
+  </script>
+</body>
+</html>
